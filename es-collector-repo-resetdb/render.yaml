@@ -1,8 +1,0 @@
-services:
-- type: web
-  name: es-collector
-  env: node
-  rootDir: es-collector
-  buildCommand: npm install
-  startCommand: node server.js
-  autoDeploy: true
