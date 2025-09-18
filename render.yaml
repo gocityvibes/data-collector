@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: es-collector
+    env: node
+    buildCommand: npm install
+    startCommand: node server.js
+    autoDeploy: true
+    branch: main
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: AUTO_MIGRATE
+        value: "1"
+      - key: SYMBOLS
+        value: "ES=F"
+      - key: DATABASE_URL
+        sync: false
