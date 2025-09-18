@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: phase1-collector
+    name: trading-api
     env: node
     plan: starter
     buildCommand: "npm install"
@@ -11,22 +11,30 @@ services:
           name: reversal-data-db
           property: connectionString
 
-databases:
-  - name: reversal-data-db
+  - type: worker
+    name: yahoo-collector
+    env: node
     plan: starter
-
-jobs:
-  - type: cron
-    name: phase2-apply-and-refresh
-    schedule: "*/5 * * * *"   # every 5 minutes
-    env: docker
-    plan: starter
-    buildCommand: ""
-    startCommand: >
-      psql $DATABASE_URL -f db/schema_phase2.sql &&
-      psql $DATABASE_URL -c "REFRESH MATERIALIZED VIEW CONCURRENTLY training_fingerprints;"
+    buildCommand: "npm install"
+    startCommand: "node collector.js"
     envVars:
       - key: DATABASE_URL
         fromDatabase:
           name: reversal-data-db
           property: connectionString
+
+  - type: cron
+    name: phase2-refresh
+    env: node
+    schedule: "*/5 * * * *"
+    buildCommand: ""
+    startCommand: "psql $DATABASE_URL -f db/schema_phase2.sql"
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: reversal-data-db
+          property: connectionString
+
+databases:
+  - name: reversal-data-db
+    plan: starter
