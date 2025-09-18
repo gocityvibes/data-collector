@@ -1,3 +1,0 @@
--- Full Phase 2 schema with reversals_labels, reversals_gold, reversals_negatives,
--- training_fingerprints MV, and get_neighbors() function
--- (placeholder text — assumed correct from earlier Pro bundle)
