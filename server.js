@@ -1,4 +1,5 @@
-/* Clean root-level server.js */
+
+/* Clean server.js with fixed backfillSymbol (1m = 30 days only) */
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
@@ -140,6 +141,7 @@ async function backfillRange(symbol, timeframe, start, end, sliceHours = 6) {
   }
 }
 
+/* ✅ Fixed backfillSymbol: 1m only tries last 30 days */
 async function backfillSymbol(symbol) {
   if (isBackfilling) return;
   isBackfilling = true;
@@ -149,8 +151,13 @@ async function backfillSymbol(symbol) {
     const now = new Date();
     const d30 = new Date(now.getTime() - 30 * 24 * 3600 * 1000);
     const d60 = new Date(now.getTime() - 60 * 24 * 3600 * 1000);
+
+    // 60→30d with 5m bars
     await backfillRange(symbol, '5m', d60, d30, 6);
+
+    // last 30d with 1m bars
     await backfillRange(symbol, '1m', d30, now, 6);
+
     collectionStats.status = 'live';
     await updateCollectionStatus(`backfill_${symbol}`, 'completed');
   } catch (e) {
