@@ -1,0 +1,39 @@
+services:
+  - type: web
+    name: es-phase2-api
+    env: node
+    plan: starter
+    buildCommand: "npm install"
+    startCommand: "npm start"
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: es-phase2-db
+          property: connectionString
+      - key: ADMIN_KEY
+        value: change-this-key
+
+  - type: worker
+    name: es-phase2-refresh-label
+    env: docker
+    plan: starter
+    schedule: "*/5 * * * *"
+    dockerCommand: >
+      bash -lc "psql $DATABASE_URL -c 'SELECT * FROM refresh_and_auto_label();'"
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: es-phase2-db
+          property: connectionString
+
+  - type: worker
+    name: es-phase2-retention-prune
+    env: docker
+    plan: starter
+    schedule: "0 * * * *"
+    dockerCommand: >
+      bash -lc "psql $DATABASE_URL -c \"SELECT 1;\""
+
+databases:
+  - name: es-phase2-db
+    plan: starter
