@@ -1,5 +1,5 @@
 
-/* Clean server.js with fixed backfillSymbol (1m = 30 days only) */
+/* server.js with startup backfill check fixed: 1m=30d, 5m=60d */
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
@@ -7,7 +7,7 @@ const cron = require('node-cron');
 const yahooFinance = require('yahoo-finance2').default;
 require('dotenv').config();
 
-yahooFinance.suppressNotices?.(['ripHistorical']); // hush legacy warnings
+yahooFinance.suppressNotices?.(['ripHistorical']); 
 
 const app = express();
 app.use(cors());
@@ -141,7 +141,6 @@ async function backfillRange(symbol, timeframe, start, end, sliceHours = 6) {
   }
 }
 
-/* ✅ Fixed backfillSymbol: 1m only tries last 30 days */
 async function backfillSymbol(symbol) {
   if (isBackfilling) return;
   isBackfilling = true;
@@ -151,13 +150,8 @@ async function backfillSymbol(symbol) {
     const now = new Date();
     const d30 = new Date(now.getTime() - 30 * 24 * 3600 * 1000);
     const d60 = new Date(now.getTime() - 60 * 24 * 3600 * 1000);
-
-    // 60→30d with 5m bars
     await backfillRange(symbol, '5m', d60, d30, 6);
-
-    // last 30d with 1m bars
     await backfillRange(symbol, '1m', d30, now, 6);
-
     collectionStats.status = 'live';
     await updateCollectionStatus(`backfill_${symbol}`, 'completed');
   } catch (e) {
@@ -176,7 +170,7 @@ async function liveCollect() {
     for (const sym of SYMBOLS) {
       for (const tf of ['1m', '5m']) {
         const wm = await getWatermark(sym, tf);
-        const defaultStart = new Date(now.getTime() - 30 * 60 * 1000); // last 30 minutes
+        const defaultStart = new Date(now.getTime() - 30 * 60 * 1000);
         const start = wm ? new Date(Math.min(wm.getTime(), now.getTime() - 60 * 1000)) : defaultStart;
         const bars = await fetchYahooData(sym, tf, start, now);
         const { rows, maxTs } = await upsertCandles(bars, sym, tf);
@@ -194,7 +188,6 @@ async function liveCollect() {
   }
 }
 
-/* ----------- API ----------- */
 app.get('/healthz', async (req, res) => {
   try { await runSql('SELECT 1'); res.json({ ok: true, using: 'chart() for 1m/5m' }); }
   catch (e) { res.status(500).json({ ok: false, error: e.message }); }
@@ -204,14 +197,17 @@ app.get('/api/status', async (req, res) => {
   try {
     const coverage = [];
     for (const sym of SYMBOLS) {
-      const r = await runSql(
-        `SELECT symbol, timeframe, COUNT(*)::int AS total_bars,
-                MIN(ts_utc) AS earliest, MAX(ts_utc) AS latest
-         FROM candles_raw WHERE symbol=$1
-         GROUP BY symbol, timeframe ORDER BY timeframe`,
-        [sym]
-      );
-      coverage.push(...r.rows);
+      for (const tf of ['1m','5m']) {
+        const days = tf === '1m' ? 30 : 60;
+        const r = await runSql(
+          `SELECT symbol, timeframe, COUNT(*)::int AS total_bars,
+                  MIN(ts_utc) AS earliest, MAX(ts_utc) AS latest
+           FROM candles_raw WHERE symbol=$1 AND ts_utc >= NOW() - INTERVAL '${days} days'
+           GROUP BY symbol, timeframe ORDER BY timeframe`,
+          [sym]
+        );
+        coverage.push(...r.rows);
+      }
     }
     const proc = await runSql('SELECT * FROM collection_status ORDER BY updated_at DESC LIMIT 50');
     res.json({ symbols: SYMBOLS, collection: collectionStats, coverage, processes: proc.rows });
@@ -234,7 +230,6 @@ app.get('/api/data-sample', async (req, res) => {
   }
 });
 
-/* ----------- Startup ----------- */
 (async () => {
   try {
     if (process.env.RESET_DB === '1') {
@@ -243,25 +238,26 @@ app.get('/api/data-sample', async (req, res) => {
       await migrateIfNeeded();
     }
 
-    // auto-backfill if database is light
     for (const s of SYMBOLS) {
-      const r = await runSql(
-        `SELECT COUNT(*)::int AS cnt
-         FROM candles_raw
-         WHERE symbol=$1 AND ts_utc >= NOW() - INTERVAL '60 days'`,
-        [s]
-      );
-      const cnt = r.rows[0]?.cnt ?? 0;
-      if (cnt < 5000) {
-        console.log(`[${s}] starting automatic backfill (rows last 60d = ${cnt})`);
-        backfillSymbol(s).catch(() => {});
-      } else {
-        console.log(`[${s}] sufficient data detected (rows last 60d = ${cnt}); entering live mode`);
-        collectionStats.status = 'live';
+      for (const tf of ['1m','5m']) {
+        const days = tf === '1m' ? 30 : 60;
+        const r = await runSql(
+          `SELECT COUNT(*)::int AS cnt
+           FROM candles_raw
+           WHERE symbol=$1 AND timeframe=$2 AND ts_utc >= NOW() - INTERVAL '${days} days'`,
+          [s, tf]
+        );
+        const cnt = r.rows[0]?.cnt ?? 0;
+        if (cnt < (tf === '1m' ? 30000 : 5000)) {
+          console.log(`[${s}:${tf}] starting automatic backfill (rows last ${days}d = ${cnt})`);
+          backfillSymbol(s).catch(() => {});
+        } else {
+          console.log(`[${s}:${tf}] sufficient data detected (rows last ${days}d = ${cnt}); entering live mode`);
+          collectionStats.status = 'live';
+        }
       }
     }
 
-    // live collection every 2 minutes
     cron.schedule('*/2 * * * *', () => liveCollect().catch(() => {}));
 
     app.listen(PORT, () => console.log(`Collector listening on :${PORT}`));
