@@ -1,17 +1,31 @@
 services:
   - type: web
-    name: es-collector
+    name: phase2-backend
     env: node
-    buildCommand: npm install
-    startCommand: node server.js
-    autoDeploy: true
-    branch: main
+    plan: starter
+    buildCommand: "npm install && npm run db:phase2"
+    startCommand: "npm start"
     envVars:
-      - key: NODE_ENV
-        value: production
-      - key: AUTO_MIGRATE
-        value: "1"
-      - key: SYMBOLS
-        value: "ES=F"
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: phase2-database
+          property: connectionString
+
+databases:
+  - name: phase2-database
+    plan: starter
+
+jobs:
+  - type: cron
+    name: refresh-training-fingerprints
+    schedule: "*/5 * * * *" # every 5 minutes
+    env: docker
+    plan: starter
+    buildCommand: ""
+    startCommand: >
+      psql $DATABASE_URL -c "REFRESH MATERIALIZED VIEW CONCURRENTLY training_fingerprints;"
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: phase2-database
+          property: connectionString
