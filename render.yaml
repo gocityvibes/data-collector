@@ -3,7 +3,7 @@ services:
     name: phase2-backend
     env: node
     plan: starter
-    buildCommand: "npm install && npm run db:phase2"
+    buildCommand: "npm install"
     startCommand: "npm start"
     envVars:
       - key: DATABASE_URL
@@ -17,12 +17,13 @@ databases:
 
 jobs:
   - type: cron
-    name: refresh-training-fingerprints
-    schedule: "*/5 * * * *" # every 5 minutes
+    name: phase2-apply-and-refresh
+    schedule: "*/5 * * * *"   # every 5 minutes
     env: docker
     plan: starter
     buildCommand: ""
     startCommand: >
+      psql $DATABASE_URL -f db/schema_phase2.sql &&
       psql $DATABASE_URL -c "REFRESH MATERIALIZED VIEW CONCURRENTLY training_fingerprints;"
     envVars:
       - key: DATABASE_URL

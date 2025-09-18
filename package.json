@@ -2,7 +2,6 @@
   "name": "phase2-deploy",
   "version": "1.0.0",
   "scripts": {
-    "db:phase2": "psql $DATABASE_URL -f db/schema_phase2.sql",
     "start": "node backend/server.js"
   },
   "dependencies": {}
