@@ -1,0 +1,1 @@
+-- same schema is applied automatically on boot when AUTO_MIGRATE=1
