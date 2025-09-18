@@ -20,3 +20,6 @@ FROM candles_raw
 GROUP BY symbol, timeframe;
 
 CREATE UNIQUE INDEX IF NOT EXISTS training_fingerprints_idx ON training_fingerprints(symbol, timeframe);
+
+-- Refresh for idempotent cron run
+REFRESH MATERIALIZED VIEW CONCURRENTLY training_fingerprints;
