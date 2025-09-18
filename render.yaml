@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: phase2-backend
+    name: phase1-collector
     env: node
     plan: starter
     buildCommand: "npm install"
@@ -8,11 +8,11 @@ services:
     envVars:
       - key: DATABASE_URL
         fromDatabase:
-          name: phase2-database
+          name: reversal-data-db
           property: connectionString
 
 databases:
-  - name: phase2-database
+  - name: reversal-data-db
     plan: starter
 
 jobs:
@@ -28,5 +28,5 @@ jobs:
     envVars:
       - key: DATABASE_URL
         fromDatabase:
-          name: phase2-database
+          name: reversal-data-db
           property: connectionString
