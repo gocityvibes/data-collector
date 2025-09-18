@@ -10,6 +10,8 @@ services:
         fromDatabase:
           name: reversal-data-db
           property: connectionString
+      - key: ADMIN_KEY
+        value: change-me
 
   - type: worker
     name: yahoo-collector

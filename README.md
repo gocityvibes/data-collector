@@ -1,23 +1,38 @@
-# Phase 2 Option B (Web API + Worker + Cron)
+# Phase 2 PRO (full schema + endpoints)
 
-## Components
-- `server.js` → Express API with `/health`, `/candles` (no node-cron).
-- `package.json` → includes express, pg, axios, etc.
-- `collector.js` → background worker polling Yahoo Finance into Postgres.
-- `render.yaml` → defines three Render services:
-  - Web API (trading-api)
-  - Worker (yahoo-collector)
-  - Cron (phase2-refresh)
-- `db/schema_phase2.sql` → creates candles_raw + materialized view training_fingerprints, and refreshes it.
+## What you get
+- Rich SQL schema:
+  - `candles_feat` (features)
+  - `reversals_pivots_unified` (k=2 pivots)
+  - `reversals_featured` (reversal + features)
+  - `training_fingerprints` **(materialized view)** with JSON features + labels
+  - `reversals_labels` + `upsert_reversal_label()`
+  - `get_neighbors()` SQL function (euclidean distance over stable features)
+- API routes:
+  - `/health`, `/config`, `/candles`
+  - `/stats`, `/reversals` (unlabeled), `/reversals/gold`, `/reversals/negatives`
+  - `/label` upsert/delete
+  - `/neighbors?symbol=&timeframe=&ts_utc=&k=50`
+  - `/fingerprints?symbol=&timeframe=&limit=...`
+  - Admin: `POST /admin/apply-schema` and `POST /admin/refresh-mv` (needs `ADMIN_KEY`)
 
-## Deploy
-1) Push to GitHub.
-2) Render → New Blueprint → select this repo.
-3) Render provisions the DB + services. Logs will show:
-   - trading-api listening
-   - yahoo-collector inserting candles
-   - phase2-refresh running every 5 min
+## Deploy (Render Blueprint)
+1. Put these files in your repo, commit, and deploy as **Blueprint**.
+2. Set `ADMIN_KEY` env var on the **web** service (render.yaml includes placeholder).
+3. After first boot, run schema once (if cron hasn't yet):
+   ```
+   curl -X POST "https://<your>.onrender.com/admin/apply-schema?key=YOUR_ADMIN_KEY"
+   ```
+
+## Quick test URLs (replace base with your service URL)
+- Health: `/health`
+- Stats: `/stats`
+- Unlabeled reversals: `/reversals?symbol=ES=F&timeframe=1m&limit=100`
+- Gold: `/reversals/gold?symbol=ES=F&timeframe=1m&limit=500`
+- Negatives: `/reversals/negatives?symbol=ES=F&timeframe=1m&limit=500`
+- Fingerprints: `/fingerprints?symbol=ES=F&timeframe=1m&limit=100`
+- Neighbors: `/neighbors?symbol=ES=F&timeframe=1m&ts_utc=YYYY-MM-DDTHH:MM:SSZ&k=50`
 
 ## Notes
-- If `candles_raw` isn't ready yet, `/candles` returns 204 instead of 500.
-- Frontend (Netlify) should call the Render web service URL for data.
+- This is **production-ready** SQL and Node, no placeholders. Views/MV can be extended later with RSI/ATR if you want.
+- All parts are idempotent; safe to re-run schema and cron refresh.
