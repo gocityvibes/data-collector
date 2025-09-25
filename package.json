@@ -1,6 +1,6 @@
 {
   "name": "candle-collector-postgres",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "private": true,
   "scripts": {
@@ -11,7 +11,7 @@
     "express": "^4.19.2",
     "pg": "^8.11.5",
     "pino": "^9.3.2",
-    "yahoo-finance2": "^3.22.0"
+    "yahoo-finance2": "^2.14.0"
   },
   "engines": {
     "node": ">=20 <23"
