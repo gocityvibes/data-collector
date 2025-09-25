@@ -2,14 +2,17 @@ import pkg from "pg";
 import logger from "./logger.js";
 
 const { Pool } = pkg;
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
+});
 
 export async function initDb() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS candles_raw (
       id BIGSERIAL PRIMARY KEY,
       symbol TEXT NOT NULL,
-      timeframe TEXT NOT NULL,
+      timeframe TEXT NOT NULL CHECK (timeframe IN ('1m','5m','15m')),
       ts_utc TIMESTAMPTZ NOT NULL,
       open NUMERIC NOT NULL,
       high NUMERIC NOT NULL,
@@ -18,7 +21,8 @@ export async function initDb() {
       volume NUMERIC NOT NULL,
       UNIQUE(symbol, timeframe, ts_utc)
     );
-    CREATE INDEX IF NOT EXISTS idx_candles_raw_tf_ts ON candles_raw(timeframe, ts_utc);
+    CREATE INDEX IF NOT EXISTS idx_candles_raw_symbol_tf_ts
+      ON candles_raw(symbol, timeframe, ts_utc DESC);
   `);
   logger.info("✅ Database ready");
 }

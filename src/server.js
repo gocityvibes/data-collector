@@ -19,37 +19,35 @@ app.get("/db/ping", async (req, res) => {
 });
 
 app.get("/candles/recent", async (req, res) => {
-  const { tf = "1m", limit = 100 } = req.query;
+  const { tf = "1m", limit = 100, symbol = "ES=F" } = req.query;
   const result = await pool.query(
-    "SELECT * FROM candles_raw WHERE timeframe=$1 ORDER BY ts_utc DESC LIMIT $2",
-    [tf, limit]
+    "SELECT symbol,timeframe,ts_utc,open,high,low,close,volume FROM candles_raw WHERE symbol=$1 AND timeframe=$2 ORDER BY ts_utc DESC LIMIT $3",
+    [symbol, tf, Math.min(Number(limit), 1000)]
   );
   res.json({ ok: true, count: result.rowCount, rows: result.rows });
 });
 
 app.get("/candles/range", async (req, res) => {
-  const { tf = "1m", from, to } = req.query;
+  const { tf = "1m", from, to, symbol = "ES=F" } = req.query;
   if (!from || !to) return res.status(400).json({ ok: false, error: "from and to required" });
   const result = await pool.query(
-    "SELECT * FROM candles_raw WHERE timeframe=$1 AND ts_utc BETWEEN $2 AND $3 ORDER BY ts_utc ASC",
-    [tf, from, to]
+    "SELECT symbol,timeframe,ts_utc,open,high,low,close,volume FROM candles_raw WHERE symbol=$1 AND timeframe=$2 AND ts_utc BETWEEN $3 AND $4 ORDER BY ts_utc ASC",
+    [symbol, tf, from, to]
   );
   res.json({ ok: true, count: result.rowCount, rows: result.rows });
 });
 
 app.get("/candles/last60days", async (req, res) => {
-  const { tf = "1m" } = req.query;
+  const { tf = "1m", symbol = "ES=F" } = req.query;
   const result = await pool.query(
-    "SELECT * FROM candles_raw WHERE timeframe=$1 AND ts_utc > NOW() - interval '60 days' ORDER BY ts_utc ASC",
-    [tf]
+    "SELECT symbol,timeframe,ts_utc,open,high,low,close,volume FROM candles_raw WHERE symbol=$1 AND timeframe=$2 AND ts_utc > NOW() - interval '60 days' ORDER BY ts_utc ASC",
+    [symbol, tf]
   );
   res.json({ ok: true, count: result.rowCount, rows: result.rows });
 });
 
 // run collector every minute
-setInterval(() => {
-  collectCandles();
-}, 60 * 1000);
+setInterval(() => { collectCandles(); }, 60 * 1000);
 
 (async () => {
   await initDb();
