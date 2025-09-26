@@ -1,56 +1,51 @@
 import express from "express";
-import dotenv from "dotenv";
-import logger from "./logger.js";
-import { initDb } from "./db.js";
-import { collectCandles } from "./collector.js";
-import pool from "./db.js";
+import cors from "cors";
+import helmet from "helmet";
+import morgan from "morgan";
 
-dotenv.config();
+import { env } from "./src/config/env.js";
+import { requestId } from "./src/middleware/requestId.js";
+import { auth } from "./src/middleware/auth.js";
+import { notFound, errorHandler } from "./src/middleware/errorHandler.js";
+
+import candlesRoute from "./src/routes/candles.js";
+import reversalsRoute from "./src/routes/reversals.js";
+import indicatorsRoute from "./src/routes/indicators.js";
+import pointsDailyRoute from "./src/routes/pointsDaily.js";
+
 const app = express();
-const PORT = process.env.PORT || 3000;
 
-app.get("/db/ping", async (req, res) => {
-  try {
-    const result = await pool.query("SELECT NOW()");
-    res.json({ ok: true, now: result.rows[0].now });
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
-  }
-});
+// Basic hardening
+app.use(helmet());
+app.use(cors({ origin: true })); // keep simple for now
+app.use(express.json({ limit: "1mb" }));
+app.use(requestId);
+app.use(morgan("combined"));
 
-app.get("/candles/recent", async (req, res) => {
-  const { tf = "1m", limit = 100, symbol = "ES=F" } = req.query;
-  const result = await pool.query(
-    "SELECT symbol,timeframe,ts_utc,open,high,low,close,volume FROM candles_raw WHERE symbol=$1 AND timeframe=$2 ORDER BY ts_utc DESC LIMIT $3",
-    [symbol, tf, Math.min(Number(limit), 1000)]
-  );
-  res.json({ ok: true, count: result.rowCount, rows: result.rows });
-});
+// Health
+app.get("/health", (req, res) => res.json({ ok: true, status: "healthy", ts: new Date().toISOString() }));
 
-app.get("/candles/range", async (req, res) => {
-  const { tf = "1m", from, to, symbol = "ES=F" } = req.query;
-  if (!from || !to) return res.status(400).json({ ok: false, error: "from and to required" });
-  const result = await pool.query(
-    "SELECT symbol,timeframe,ts_utc,open,high,low,close,volume FROM candles_raw WHERE symbol=$1 AND timeframe=$2 AND ts_utc BETWEEN $3 AND $4 ORDER BY ts_utc ASC",
-    [symbol, tf, from, to]
-  );
-  res.json({ ok: true, count: result.rowCount, rows: result.rows });
-});
+// Auth (simple API key if provided)
+if (env.API_KEY) {
+  app.use(auth);
+}
 
-app.get("/candles/last60days", async (req, res) => {
-  const { tf = "1m", symbol = "ES=F" } = req.query;
-  const result = await pool.query(
-    "SELECT symbol,timeframe,ts_utc,open,high,low,close,volume FROM candles_raw WHERE symbol=$1 AND timeframe=$2 AND ts_utc > NOW() - interval '60 days' ORDER BY ts_utc ASC",
-    [symbol, tf]
-  );
-  res.json({ ok: true, count: result.rowCount, rows: result.rows });
-});
+// Routes
+app.use(candlesRoute);
+app.use(reversalsRoute);
+app.use(indicatorsRoute);
+app.use(pointsDailyRoute);
 
-// run collector every minute
-setInterval(() => { collectCandles(); }, 60 * 1000);
+// 404 + error handler
+app.use(notFound);
+app.use(errorHandler);
 
-(async () => {
-  await initDb();
-  await collectCandles();
-  app.listen(PORT, () => logger.info(`🚀 Server running on port ${PORT}`));
-})();
+// Start if run directly
+if (process.env.NODE_ENV !== "test") {
+  const port = Number(process.env.PORT || 3000);
+  app.listen(port, () => {
+    console.log(`Server listening on :${port}`);
+  });
+}
+
+export default app;
